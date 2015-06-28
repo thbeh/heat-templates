@@ -1,0 +1,46 @@
+heat_template_version: 2013-05-23
+
+description: Simple template to deploy a single compute instance
+
+parameters:
+  image:
+    type: string
+    label: Image name or ID
+    description: Image to be used for compute instance
+    default: centos-6.6-x86_64
+  flavor:
+    type: string
+    label: Flavor
+    description: Type of instance
+    default: m1.small
+  key:
+    type: string
+    label: Key name
+    description: name of key-pair to be used for compute instance
+    default: cloud
+  private_network:
+    type: string
+    label: Private network name of id
+    description: Network to attach instance to
+    default: private
+  public_network:
+    type: string
+    label: Public network name or id
+    description: Public network with floating IP addresses
+    default: public
+  num_instances:
+    type: number
+    description: Number of instances to create
+    default: 1
+
+resources:
+
+  server_group:
+    type: OS::Heat::ResourceGroup
+    properties:
+      count: { get_param: num_instances }
+      resource_def: 
+        type: server_with_ip.yaml 
+        properties:
+          name: my-server_%index%
+

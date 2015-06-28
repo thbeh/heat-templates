@@ -1,0 +1,30 @@
+heat_template_version: 2013-05-23
+
+parameters:
+   name:
+     type: string
+     label: instance name
+
+resources:
+   floating_ip:
+     type: OS::Nova::FloatingIP
+     properties:
+       pool: public
+
+   instance:
+     type: OS::Nova::Server
+     properties:
+       name: { get_param: name }
+       flavor: m1.small
+       image: centos-6.6-x86_64
+       key_name: cloud
+       user_data_format: RAW
+       networks:
+         - network: private
+
+
+   association:
+     type: OS::Nova::FloatingIPAssociation
+     properties:
+       floating_ip: { get_resource: floating_ip }
+       server_id: { get_resource: instance }
