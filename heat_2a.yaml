@@ -34,13 +34,71 @@ parameters:
     default: 1
 
 resources:
+  
+  stack-string:
+    type: OS::Heat::RandomString
+    properties:
+      length: 6
+      sequence: lettersdigits
+
+  coms:
+    type: OS::Nova::KeyPair
+    properties:
+      save_private_key: true
+      name:
+        str_replace:
+          template: hadoop-$stackstr-coms
+          params:
+            $stackstr:
+              get_attr:
+                - stack-string
+                - value
+
+  ambari_server:
+    type: OS::Nova::Server
+    properties:
+      name: ambari-server
+      flavor: m1.small
+      image: centos-6.6-x86_64
+      key_name: cloud
+      user_data_format: RAW
+      networks:
+        - network: private
+      user_data:
+        str_replace:
+          template: |
+            #!/bin/bash -v
+            rpm -ivh http://yum.puppetlabs.com/puppetlabs-release-el-6.noarch.rpm
+            yum install -y puppet-server
+            puppet resource package puppet-server ensure=latest
+          params:
+            $ambari_ip: { get_param: image }
+      personality:
+        /root/.ssh/coms_rsa:
+          get_attr:
+            - coms
+            - private_key
+
+  
+  floating_ip:
+    type: OS::Nova::FloatingIP
+    properties: 
+      pool: public
+
+  association:
+    type: OS::Nova::FloatingIPAssociation
+    properties:
+      floating_ip: { get_resource: floating_ip }
+      server_id: { get_resource: ambari_server }
 
   server_group:
     type: OS::Heat::ResourceGroup
     properties:
       count: { get_param: num_instances }
       resource_def: 
-        type: server_with_ip.yaml 
+        type: HDP::Hadoop::Nodes 
         properties:
-          name: my-server_%index%
-
+          name: hdp-node_%index%
+          ipaddr: { get_attr: [ ambari_server, first_address ] }
+          private_key: { get_attr: [ coms, private_key ] }
+          public_key: { get_attr: [ coms, public_key ] }

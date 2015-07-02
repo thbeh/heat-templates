@@ -1,0 +1,3 @@
+resource_registry:
+  HDP::Hadoop::Nodes: server_with_ip.yaml
+  HDP::Hadoop::Ambari: ambari_server.yaml

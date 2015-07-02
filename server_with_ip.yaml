@@ -4,12 +4,17 @@ parameters:
    name:
      type: string
      label: instance name
+   ipaddr:
+     type: string
+     label: server ip
+   public_key:
+     type: string
+     label: public key
+   private_key:
+     type: string
+     label: private key
 
 resources:
-   floating_ip:
-     type: OS::Nova::FloatingIP
-     properties:
-       pool: public
 
    instance:
      type: OS::Nova::Server
@@ -18,13 +23,17 @@ resources:
        flavor: m1.small
        image: centos-6.6-x86_64
        key_name: cloud
-       user_data_format: RAW
        networks:
          - network: private
+       user_data_format: RAW
+       user_data:
+         str_replace:
+           template: |
+             #!/bin/bash -v
+             rpm -ivh http://yum.puppetlabs.com/puppetlabs-release-el-6.noarch.rpm
+             yum install -y puppet
+             echo "$ipaddr" puppet >> /etc/hosts
+             echo "$public_key" > /root/.ssh/keys
+           params:
+             $ambari_ip: { get_param: ipaddr }
 
-
-   association:
-     type: OS::Nova::FloatingIPAssociation
-     properties:
-       floating_ip: { get_resource: floating_ip }
-       server_id: { get_resource: instance }
