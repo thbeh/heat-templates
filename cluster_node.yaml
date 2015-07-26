@@ -1,0 +1,38 @@
+heat_template_version: 2013-05-23
+
+parameters:
+   name:
+     type: string
+     label: instance name
+
+resources:
+
+   instance:
+     type: OS::Nova::Server
+     properties:
+       name: { get_param: name }
+       flavor: m1.small
+       image: centos-6.6-x86_64
+       key_name: cloud 
+       networks:
+         - network: private_static
+         - network: private
+       user_data_format: RAW
+       user_data: 
+         str_replace:
+           template: |
+             #!/bin/bash
+
+             TMP_PATH=`mktemp -d`
+             mkdir -p /etc/puppet/hiera
+             git clone https://github.com/thbeh/puppetfiles.git $TMP_PATH
+
+             cp -R $TMP_PATH/puppet/* /etc/puppet/
+             cp -R $TMP_PATH/hiera/hiera.yaml /etc/puppet/
+             cp -R $TMP_PATH/hiera/* /etc/puppet/hiera/
+
+             puppet apply $TMP_PATH/puppet/client.pp
+
+           params: 
+             $fixed_ip: { get_param: name }
+

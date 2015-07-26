@@ -1,2 +1,0 @@
-resource_registry:
-  My::Server::WithIP: server_with_ip.yaml

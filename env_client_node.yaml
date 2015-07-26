@@ -1,0 +1,2 @@
+resource_registry:
+  HDP::Hadoop::Nodes: client_node.yaml

@@ -13,6 +13,9 @@ parameters:
    private_key:
      type: string
      label: private key
+   key:
+     type: string
+     label: key name
 
 resources:
 
@@ -22,19 +25,18 @@ resources:
        name: { get_param: name }
        flavor: m1.small
        image: centos-6.6-x86_64
-       key_name: cloud 
+       personality:
+         /root/.ssh/coms_rsa: { get_param: private_key }
        networks:
          - network: private
+       key_name: { get_param: key }
        user_data_format: RAW
        user_data:
          str_replace:
            template: |
-             #!/bin/bash -v
-             rpm -ivh http://yum.puppetlabs.com/puppetlabs-release-el-6.noarch.rpm
-             yum install -y puppet
-             echo $ambari_ip puppet >> /etc/hosts
-             echo $publickey >> /root/keys
+             #!/bin/bash
+             chmod 0700 /root/.ssh/coms_rsa
+             echo $PUBLIC_KEY
+             echo $PUBLIC_KEY >> /home/centos/.ssh/authorized_keys
            params:
-             $ambari_ip: { get_param: ipaddr }
-             $publickey: { get_param: public_key }
-
+             $PUBLIC_KEY: { get_param: public_key }

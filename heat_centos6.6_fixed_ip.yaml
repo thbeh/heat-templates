@@ -3,6 +3,10 @@ heat_template_version: 2013-05-23
 description: Simple template to deploy a single compute instance
 
 parameters:
+  vmname:
+    type: string
+    label: VM name
+    default: centos-6.6-20gb
   image:
     type: string
     label: Image name or ID
@@ -59,14 +63,32 @@ resources:
   my_instance:
     type: OS::Nova::Server
     properties:
-      name: centos-6.6-20gb
+      name: { get_param: vmname } 
       image: { get_param: image }
       flavor: { get_param: flavor }
       key_name: {get_param: key }
-      user_data_format: RAW
       networks:
         - port: { get_resource: instance_port0 }
         - port: { get_resource: instance_port1 } 
+      user_data_format: RAW
+      user_data: 
+        str_replace:
+          template: |
+            #!/bin/bash
+
+            mkdir -p /etc/puppet/hiera
+            TMP_PATH=`mktemp -d`
+            git clone https://github.com/thbeh/puppetfiles.git $TMP_PATH
+
+            cp -R $TMP_PATH/puppet/* /etc/puppet/
+            cp -R $TMP_PATH/hiera/hiera.yaml /etc/puppet/
+            cp -R $TMP_PATH/hiera/* /etc/puppet/hiera/
+
+            puppet apply $TMP_PATH/puppet/server.pp
+
+          params:
+            $fixed_ip: { get_param: shared_ip }
+
 
   floating_ip:
     type: OS::Neutron::FloatingIP

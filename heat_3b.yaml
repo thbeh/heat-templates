@@ -54,35 +54,6 @@ resources:
                 - stack-string
                 - value
 
-  config-ambari-server:
-    type: OS::Heat::SoftwareConfig
-    properties:
-      group: script
-      inputs:
-        - name: public_key
-      config: |
-        #!/bin/bash
-        chmod 0700 /root/.ssh/coms_rsa
-        echo "$public_key" >> /root/.ssh/authorized_keys
-
-        rpm -ivh http://yum.puppetlabs.com/puppetlabs-release-el-6.noarch.rpm
-        yum install -y puppet-server
-        puppet resource package puppet-server ensure=latest
-        echo hdp_node_* >> /etc/puppet/autosign.conf
-        /etc/init.d/puppetmaster restart
-
-  deploy-ambari-server:
-    type: OS::Heat::SoftwareDeployment
-    properties:
-      input_values:
-        get_attr:
-          - coms
-          - public_key
-      config:
-        get_resource: config-ambari-server
-      server:
-        get_resource: ambari_server      
-
   ambari_server:
     type: OS::Nova::Server
     properties:
@@ -90,7 +61,6 @@ resources:
       flavor: m1.small
       image: centos-6.6-x86_64
       key_name: cloud
-      user_data_format: SOFTWARE_CONFIG
       networks:
         - network: private
       personality:
@@ -98,6 +68,17 @@ resources:
           get_attr:
             - coms
             - private_key
+      user_data_format: RAW
+      user_data:
+        str_replace:
+          template: |
+            #!/bin/bash
+            chmod 0700 /root/.ssh/coms_rsa
+            echo "appending public key to authorized_keys"
+            echo $PUBLIC_KEY
+            echo "hello world"  >> /root/.ssh/authorized_keys
+          params:
+            $PUBLIC_KEY: { get_attr: [ coms, public_key ] } 
 
   floating_ip:
     type: OS::Nova::FloatingIP
@@ -119,24 +100,10 @@ resources:
         properties:
           name: hdp-node_%index%
           ipaddr: { get_attr: [ ambari_server, first_address ] }
+          key: { get_resource: coms }
           private_key: { get_attr: [ coms, private_key ] }
-          public_key: { get_attr: [ coms, public_key ] }
-
-  config_deploy:
-    type: OS::Heat::SoftwareConfig
-    properties:
-      group: script
-      config: |
-        #!/bin/bash
-
-  deploy:
-    type: OS::Heat::SoftwareDeployment
-    properties:
-      config:
-        get_resource: config_deploy
-      server:
-        get_resource: ambari_server
-    depends_on:
-        - deploy-ambari-server
-        - server_group
+          public_key:
+            get_attr:
+              - coms
+              - public_key
 
