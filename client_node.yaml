@@ -50,6 +50,8 @@ resources:
              cp -R $TMP_PATH/puppet/* /etc/puppet/
              cp -R $TMP_PATH/hiera/hiera.yaml /etc/puppet/
              cp -R $TMP_PATH/hiera/* /etc/puppet/hiera/
+             
+             echo "server_ip:\"$SERVER_IP\"" | sudo tee --append /etc/puppet/hiera/common.yaml 2> /dev/null
 
              puppet apply $TMP_PATH/puppet/client.pp
              
