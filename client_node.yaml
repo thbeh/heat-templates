@@ -16,6 +16,9 @@ parameters:
    key:
      type: string
      label: key name
+   ipaddr:
+     type: string
+     label: consul server ip
 
 resources:
 
@@ -25,18 +28,31 @@ resources:
        name: { get_param: name }
        flavor: m1.small
        image: centos-6.6-x86_64
+       key_name: { get_param: key }
        personality:
          /root/.ssh/coms_rsa: { get_param: private_key }
        networks:
+         - network: private_static
          - network: private
-       key_name: { get_param: key }
        user_data_format: RAW
        user_data:
          str_replace:
            template: |
              #!/bin/bash
              chmod 0700 /root/.ssh/coms_rsa
-             echo $PUBLIC_KEY
              echo $PUBLIC_KEY >> /home/centos/.ssh/authorized_keys
+             echo "$SERVER_IP consul0" | sudo tee --append /etc/hosts 2> /dev/null
+             
+             TMP_PATH=`mktemp -d`
+             mkdir -p /etc/puppet/hiera
+             git clone https://github.com/thbeh/puppetfiles.git $TMP_PATH
+
+             cp -R $TMP_PATH/puppet/* /etc/puppet/
+             cp -R $TMP_PATH/hiera/hiera.yaml /etc/puppet/
+             cp -R $TMP_PATH/hiera/* /etc/puppet/hiera/
+
+             puppet apply $TMP_PATH/puppet/client.pp
+             
            params:
              $PUBLIC_KEY: { get_param: public_key }
+             $SERVER_IP: { get_param: ipaddr }

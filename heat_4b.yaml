@@ -1,0 +1,143 @@
+heat_template_version: 2013-05-23
+
+description: Simple template to deploy a single compute instance
+
+parameters:
+  image:
+    type: string
+    label: Image name or ID
+    description: Image to be used for compute instance
+    default: centos-6.6-x86_64
+  flavor:
+    type: string
+    label: Flavor
+    description: Type of instance
+    default: m1.small
+  key:
+    type: string
+    label: Key name
+    description: name of key-pair to be used for compute instance
+    default: cloud
+  private_network:
+    type: string
+    label: Private network name of id
+    description: Network to attach instance to
+    default: df67a5c1-1340-459f-92e9-ac95e351ceb1
+  private_subnet_id:
+    type: string
+    label: Private network name of id
+    description: Network to attach instance to
+    default: 5455e630-dabe-46e7-a05e-aacd94ba5998 
+  public_network:
+    type: string
+    label: Public network name or id
+    description: Public network with floating IP addresses
+    default: public
+  private_static:
+    type: string
+    default: 0f8de7c7-f5cf-40e1-8273-283967532f1c 
+  shared_ip:
+    type: string
+    description: Fixed ip
+    default: 172.0.33.10
+  fqdn:
+    type: string
+    description: fqdn for all nodes
+    default: node.dc1.consul
+  num_instances:
+    type: number
+    description: Number of instances to create
+    default: 1
+
+resources:
+  instance_port0:
+    type: OS::Neutron::Port
+    properties:
+      network_id: { get_param: private_static }
+      fixed_ips:
+        - ip_address: { get_param: shared_ip }
+
+  instance_port1:
+    type: OS::Neutron::Port
+    properties:
+      network_id: { get_param: private_network }
+      fixed_ips:
+        - subnet_id: { get_param: private_subnet_id }
+
+  stack-string:
+    type: OS::Heat::RandomString
+    properties:
+      length: 6
+      sequence: lettersdigits
+
+  coms:
+    type: OS::Nova::KeyPair
+    properties:
+      save_private_key: true
+      name:
+        str_replace:
+          template: hadoop-$stackstr-coms
+          params:
+            $stackstr:
+              get_attr:
+                - stack-string
+                - value
+
+  ambari_server:
+    type: OS::Nova::Server
+    properties:
+      name: { get_param: vmname }
+      flavor: { get_param: flavor }
+      image: { get_param: image }
+      key_name: { get_param: key }
+      networks:
+        - port: { get_resource: instance_port0 }
+        - port: { get_resource: instance_port1 }
+      personality:
+        /root/.ssh/coms_rsa:
+          get_attr:
+            - coms
+            - private_key
+      user_data_format: RAW
+      user_data:
+        str_replace:
+          template: |
+            #!/bin/bash
+            chmod 0700 /root/.ssh/coms_rsa
+#            echo "appending public key to authorized_keys"
+#            echo $PUBLIC_KEY  >> /home/centos/.ssh/authorized_keys
+            
+            mkdir -p /etc/puppet/hiera
+            TMP_PATH=`mktemp -d`
+            git clone https://github.com/thbeh/puppetfiles.git $TMP_PATH
+
+            cp -R $TMP_PATH/puppet/* /etc/puppet/
+            cp -R $TMP_PATH/hiera/hiera.yaml /etc/puppet/
+            cp -R $TMP_PATH/hiera/* /etc/puppet/hiera/
+
+            puppet apply $TMP_PATH/puppet/server.pp
+            
+          params:
+            $PUBLIC_KEY: { get_attr: [ coms, public_key ] } 
+
+  floating_ip:
+    type: OS::Nova::FloatingIP
+    properties: 
+      pool: public
+
+  server_group:
+    type: OS::Heat::ResourceGroup
+    properties:
+      count: { get_param: num_instances }
+      resource_def: 
+        type: HDP::Hadoop::Nodes 
+        properties:
+          name: hdp-node_%index%
+          ipaddr: { get_attr: [ ambari_server, first_address ] }
+          key: { get_resource: coms }
+          private_key: { get_attr: [ coms, private_key ] }
+          public_key:
+            get_attr:
+              - coms
+              - public_key
+
