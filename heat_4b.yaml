@@ -3,6 +3,14 @@ heat_template_version: 2013-05-23
 description: Simple template to deploy a single compute instance
 
 parameters:
+  prefix:
+    type: string
+    label: domain prefix
+    default: node.dc1.consul
+  vmname: 
+    type: string
+    label: VM name 
+    default: centos-6.6-20gb
   image:
     type: string
     label: Image name or ID
@@ -12,7 +20,7 @@ parameters:
     type: string
     label: Flavor
     description: Type of instance
-    default: m1.small
+    default: m1.large
   key:
     type: string
     label: Key name
@@ -44,7 +52,11 @@ parameters:
     type: string
     description: fqdn for all nodes
     default: node.dc1.consul
-  num_instances:
+  client:
+    type: number
+    description: number of client nodes
+    default: 1
+  node_instances:
     type: number
     description: Number of instances to create
     default: 1
@@ -86,8 +98,13 @@ resources:
   ambari_server:
     type: OS::Nova::Server
     properties:
-      name: { get_param: vmname }
-      flavor: { get_param: flavor }
+      name:
+        str_replace:
+          template: $name.$prefix
+          params:
+            $name: { get_param: vmname }
+            $prefix: { get_param: prefix }
+      flavor: m1.small 
       image: { get_param: image }
       key_name: { get_param: key }
       networks:
@@ -104,12 +121,16 @@ resources:
           template: |
             #!/bin/bash
             chmod 0700 /root/.ssh/coms_rsa
-#            echo "appending public key to authorized_keys"
-#            echo $PUBLIC_KEY  >> /home/centos/.ssh/authorized_keys
             
             mkdir -p /etc/puppet/hiera
             TMP_PATH=`mktemp -d`
             git clone https://github.com/thbeh/puppetfiles.git $TMP_PATH
+
+            cat << EOF >> $TMP_PATH/puppet/server.pp
+            class { 'jdk_oracle':
+              version => "8"
+            }
+            EOF
 
             cp -R $TMP_PATH/puppet/* /etc/puppet/
             cp -R $TMP_PATH/hiera/hiera.yaml /etc/puppet/
@@ -121,20 +142,45 @@ resources:
             $PUBLIC_KEY: { get_attr: [ coms, public_key ] } 
 
   floating_ip:
-    type: OS::Nova::FloatingIP
-    properties: 
-      pool: public
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network: { get_param: public_network }
+      port_id: { get_resource: instance_port1 }
+
+  client_group:
+    type: OS::Heat::ResourceGroup
+    properties:
+      count: { get_param: client }
+      resource_def: 
+        type: HDP::Hadoop::Nodes 
+        properties:
+          name:
+            str_replace:
+              template: client%index%.$prefix
+              params:
+                $prefix: { get_param: prefix }
+          ipaddr: { get_attr: [ instance_port1, fixed_ips, 0, ip_address ] }
+          key: { get_param: key }
+          private_key: { get_attr: [ coms, private_key ] }
+          public_key:
+            get_attr:
+              - coms
+              - public_key
 
   server_group:
     type: OS::Heat::ResourceGroup
     properties:
-      count: { get_param: num_instances }
+      count: { get_param: node_instances }
       resource_def: 
         type: HDP::Hadoop::Nodes 
         properties:
-          name: hdp-node_%index%
-          ipaddr: { get_attr: [ ambari_server, first_address ] }
-          key: { get_resource: coms }
+          name:
+            str_replace:
+              template: node%index%.$prefix
+              params:
+                $prefix: { get_param: prefix }
+          ipaddr: { get_attr: [ instance_port1, fixed_ips, 0, ip_address ] }
+          key: { get_param: key }
           private_key: { get_attr: [ coms, private_key ] }
           public_key:
             get_attr:

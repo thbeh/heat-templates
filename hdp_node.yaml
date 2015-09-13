@@ -1,0 +1,103 @@
+heat_template_version: 2013-05-23
+
+description: Simple template to deploy a single compute instance
+
+parameters:
+  prefix:
+    type: string
+    label: domain prefix
+    default: node.dc1.consul
+  vmname: 
+    type: string
+    label: VM name 
+    default: centos-6.6-20gb
+  image:
+    type: string
+    label: Image name or ID
+    description: Image to be used for compute instance
+    default: centos-6.6-x86_64
+  flavor:
+    type: string
+    label: Flavor
+    description: Type of instance
+    default: m1.large
+  key:
+    type: string
+    label: Key name
+    description: name of key-pair to be used for compute instance
+    default: cloud
+  private_network:
+    type: string
+    label: Private network name of id
+    description: Network to attach instance to
+    default: df67a5c1-1340-459f-92e9-ac95e351ceb1
+  private_subnet_id:
+    type: string
+    label: Private network name of id
+    description: Network to attach instance to
+    default: 5455e630-dabe-46e7-a05e-aacd94ba5998 
+  public_network:
+    type: string
+    label: Public network name or id
+    description: Public network with floating IP addresses
+    default: public
+  private_static:
+    type: string
+    default: 0f8de7c7-f5cf-40e1-8273-283967532f1c 
+  shared_ip:
+    type: string
+    description: Fixed ip
+    default: 172.0.33.10
+  private_ip:
+    type: string
+    description: ambari_server ip
+  nodename:
+    type: string
+    description: fqdn for all nodes
+    default: node%index%
+  num_instances:
+    type: number
+    description: Number of instances to create
+    default: 1
+
+resources:
+  stack-string:
+    type: OS::Heat::RandomString
+    properties:
+      length: 6
+      sequence: lettersdigits
+
+  coms:
+    type: OS::Nova::KeyPair
+    properties:
+      save_private_key: true
+      name:
+        str_replace:
+          template: hadoop-$stackstr-coms
+          params:
+            $stackstr:
+              get_attr:
+                - stack-string
+                - value
+
+  server_group:
+    type: OS::Heat::ResourceGroup
+    properties:
+      count: { get_param: num_instances }
+      resource_def: 
+        type: HDP::Hadoop::Nodes 
+        properties:
+          name:
+            str_replace:
+              template: $nodename.$prefix
+              params:
+                $nodename: { get_param: nodename }
+                $prefix: { get_param: prefix }
+          ipaddr: { get_param: private_ip }
+          key: { get_param: key }
+          private_key: { get_attr: [ coms, private_key ] }
+          public_key:
+            get_attr:
+              - coms
+              - public_key
+

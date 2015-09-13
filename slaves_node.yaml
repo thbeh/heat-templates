@@ -56,23 +56,10 @@ resources:
              TMP_PATH=`mktemp -d`
              mkdir -p /etc/puppet/hiera
              git clone https://github.com/thbeh/puppetfiles.git $TMP_PATH
-             wget https://www.dropbox.com/s/iqg5y0vwdv1jg2l/data-platform-1.0.0-1.el6.x86_64.rpm -O $TMP_PATH
-             wget https://www.dropbox.com/s/z1ocrdmkmts4281/data-platform-extras-1.0.0-1.x86_64.rpm -O $TMP_PATH
-
-             sysctl fs.file-max=65536
-             sysctl -p
-             bash -c "cat <<EOF_LIMITS >> /etc/security/limits.conf
-             *                soft    nofile          65536
-             *                hard    nofile          65536
-             EOF_LIMITS
-             "
-
-             yum -y --nogpgcheck --noplugins localinstall $TMP_PATH/data-platform-1.0.0-1.el6.x86_64.rpm
-             rpm -i $TMP_PATH/data-platform-extras-1.0.0-1.x86_64.rpm
 
              cat << EOF >> $TMP_PATH/puppet/node.pp
              class { 'jdk_oracle':
-               version => "8"
+               version => "7"
              }
              EOF
 
